@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Dialog</class>
+ <widget class="QDialog" name="Dialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>942</width>
+    <height>642</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <widget class="QWidget" name="verticalLayoutWidget">
+   <property name="geometry">
+    <rect>
+     <x>50</x>
+     <y>60</y>
+     <width>151</width>
+     <height>491</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QLabel" name="_now_price">
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_macd_hist">
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_macd_12">
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_macd_26">
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_RSI">
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_ATR_band_15_Top">
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_ATR_band_15_bottom">
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_moving_average_15m_24">
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QWidget" name="verticalLayoutWidget_2">
+   <property name="geometry">
+    <rect>
+     <x>250</x>
+     <y>60</y>
+     <width>181</width>
+     <height>491</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout_2">
+    <item>
+     <widget class="QCheckBox" name="_MACD_hist_is_it_above_X">
+      <property name="text">
+       <string>MACD_hist_is_it_above_X</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_MACD_hist_is_it_below_X">
+      <property name="text">
+       <string>MACD_hist_is_it_below_X</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_macd_goldencross_bool">
+      <property name="text">
+       <string>macd_goldencross_bool</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_macd_deadcross_bool">
+      <property name="text">
+       <string>macd_deadcross_bool</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_RSI_is_it_below_X">
+      <property name="text">
+       <string>RSI_is_it_below_X</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_RSI_is_it_above_X">
+      <property name="text">
+       <string>RSI_is_it_above_X</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_ATR_band_rising">
+      <property name="text">
+       <string>ATR_band_rising</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_ATR_band_falling">
+      <property name="text">
+       <string>ATR_band_falling</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_touching_15m_20ma">
+      <property name="text">
+       <string>touching_15m_20ma</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QWidget" name="verticalLayoutWidget_3">
+   <property name="geometry">
+    <rect>
+     <x>460</x>
+     <y>60</y>
+     <width>201</width>
+     <height>491</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout_3">
+    <item>
+     <widget class="QCheckBox" name="_macd_enter_long_signal">
+      <property name="text">
+       <string>macd_enter_long_signal</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_macd_enter_short_signal">
+      <property name="text">
+       <string>macd_enter_short_signal</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_macd_exit_short_signal">
+      <property name="text">
+       <string>macd_exit_short_signal</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_macd_exit_long_signal">
+      <property name="text">
+       <string>macd_exit_long_signal</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_ATR_long_signal">
+      <property name="text">
+       <string>ATR_long_signal</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_ATR_short_signal">
+      <property name="text">
+       <string>ATR_short_signal</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="_touching_15m_20ma_signal">
+      <property name="text">
+       <string>touching_15m_20ma_signal</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QWidget" name="verticalLayoutWidget_4">
+   <property name="geometry">
+    <rect>
+     <x>690</x>
+     <y>60</y>
+     <width>151</width>
+     <height>241</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout_4">
+    <item>
+     <widget class="QLabel" name="_my_money">
+      <property name="text">
+       <string>my_money</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_now_yield">
+      <property name="text">
+       <string>now_yield</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_now_yield_percentage">
+      <property name="text">
+       <string>now_yield_percentage</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_now_position">
+      <property name="text">
+       <string>now_position</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
