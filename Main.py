@@ -15,18 +15,19 @@ from binance_f.base.printobject import *
 
 form_class = uic.loadUiType("mainUI.ui")[0]
 
-class WindowClass(QMainWindow, form_class) :
+form_class = uic.loadUiType("mainUI.ui")[0]
+
+class Main(QMainWindow, form_class) :
     def __init__(self) :
         super().__init__()
         self.setupUi(self)
-        api_key = keys()
-        self.request_client = RequestClient(api_key=api_key.api_key(), secret_key="")
+        #api_key = keys()
+        self.request_client = RequestClient(api_key="", secret_key="")
         # self.File_class = File_class('2020_05')
         self.init_vars()
         self.init_status_bools()
         self.init_signals_bools()
-        self.init_position_bools()
-        self.init_threads()
+        self.init_update_threads()
 
     def init_vars(self):
         self.my_money = 1000
@@ -38,6 +39,7 @@ class WindowClass(QMainWindow, form_class) :
         self.ATR_band_15_Top = 0
         self.ATR_band_15_bottom = 0
         self.moving_average_15m_24 = 0
+
 
         self.candleStickArrFor1m = []
         self.candloStickArrFor1m_NP = []
@@ -54,7 +56,7 @@ class WindowClass(QMainWindow, form_class) :
         self.ATR_band_falling = False
         self.touching_15m_20ma = False
 
-    def init_signal_bools(self):
+    def init_signals_bools(self):
         self.macd_enter_long_signal =False
         self.macd_enter_short_signal = False
         self.macd_exit_short_signal = False
@@ -67,15 +69,45 @@ class WindowClass(QMainWindow, form_class) :
         self.no_position_thread()
 
     def init_update_threads(self):
-        self.update_candlestickArr_1m_per1s_thread()
-        self.update_candlestickArr_1m_and_checking_MACDhist_per1s_thr()
-        self.update_candlestickArr_15m_and_checking_ATR_per1s_thr()
+        self.update_candlestickArrFor1m_per1s_thread()
+        self.extract_candlestickArrFor1m_NP_per1s_thread()
         self.update_RSI_per3s_status_thr()
-        self.update_ATR_position_tradeOut_signal_per1s_thr()
-        self.main_thr()
-        print(f'{(60 - datetime.now().second)}초 후, 1분봉 종가 업데이트 쓰레드가 시작됩니다.')
-        threading.Timer((60-datetime.now().second), self.update_closePrice_per1m_thr).start()
+        self.update_candlestickArr_15m_and_checking_ATR_per1s_thr()
+        self.update_UI_thread()
+        self.status_bool_check_thread()
+        #self.main_thr()
 
+    def status_bool_check_thread(self):
+        # 상방 돌파
+        if self.now_price >= self.ATR_band_15_Top:
+            self.ATR_band_rising = True
+            self.ATR_band_falling = False
+        # 하방 돌파
+        elif self.now_price <= self.ATR_band_15_bottom:
+            self.ATR_band_falling = True
+            self.ATR_band_rising = False
+        # 중앙
+        elif self.now_price < self.ATR_band_15_Top and self.now_price > self.ATR_band_15_bottom:
+            self.ATR_band_rising = False
+            self.ATR_band_falling = False
+
+        if self.now_price == self.moving_average_15m_24:
+            self.touching_15m_20ma = True
+
+        X_low = 35
+        X_high = 65
+        if self.RSI < X_low:
+            self.RSI_is_it_below_X = True
+            self.RSI_is_it_above_X = False
+        elif self.RSI >= X_high and self.RSI <= X_low:
+            self.RSI_is_it_below_X = False
+            self.RSI_is_it_above_X = False
+        elif self.RSI > X_high:
+            self.RSI_is_it_below_X = False
+            self.RSI_is_it_above_X = True
+
+        self.checking_MACDhist()
+        threading.Timer(0.1, self.status_bool_check_thread).start()
 
     def update_candlestickArrFor1m_per1s_thread(self):
         try:
@@ -84,106 +116,101 @@ class WindowClass(QMainWindow, form_class) :
                                                                startTime=None,
                                                                endTime=self.request_client.get_servertime(),
                                                                limit=50)
-            self.now_price = float(self.candleStickArrFor1m[-1].close)
             trash_Arr = []
             for stick in self.candleStickArrFor1m:
                 trash_Arr.append(float(stick.close))
             self.candloStickArrFor1m_NP = np.array(trash_Arr, dtype='f8')
         except:
             print("인터넷 연결 / 서버 확인 필요")
-        threading.Timer(1, self.update_candlestickArr_1m_and_checking_MACDhist_per1s_thr).start()
+        threading.Timer(1, self.update_candlestickArrFor1m_per1s_thread).start()
 
     def extract_candlestickArrFor1m_NP_per1s_thread(self):
         #macd 값들 ta라이브러리로 넘파이 배열을 넣어서 전역변수에 넣어준다.
+        self.now_price = float(self.candleStickArrFor1m[-1].close)
+
         macd_12Arr, macd_26Arr, macd_histArr = ta.MACD(self.candloStickArrFor1m_NP, fastperiod=12, slowperiod=26,
                                                          signalperiod=9)
-        self.macd_12 = macd_12Arr[-1]
-        self.macd_26 = macd_26Arr[-1]
-        self.macd_hist = macd_histArr[-1]
 
-        #
-
-
-
+        self.macd_12 = float(macd_12Arr[-1])
+        self.macd_26 = float(macd_26Arr[-1])
+        self.macd_hist = float(macd_histArr[-1])
+        threading.Timer(1, self.extract_candlestickArrFor1m_NP_per1s_thread).start()
 
     def update_UI_thread(self):
-        self._now_price.setText(self.now_price)
-        self._macd_12.setText(self.macd_12)
-        self._macd_26.setText(self.macd_26)
-        self._macd_hist.setText(self.macd_hist)
+        self._now_price.setText(f'현재가 : {str(self.now_price)}')
+        self._macd_12.setText(f'macd(12) : {str(self.macd_12)})')
+        self._macd_26.setText(f'macd(26) : {str(self.macd_26)})')
+        self._macd_hist.setText(f'macd_hist : {str(self.macd_hist)}')
+        self._RSI.setText(f'RSI : {str(self.RSI)}')
+        self._ATR_band_15_Top.setText(f'ATR_Top : {str(self.ATR_band_15_Top)}')
+        self._ATR_band_15_bottom.setText(f'ATR_bottom : {str(self.ATR_band_15_bottom)}')
+        self._moving_average_15m_24.setText(f'mv_15m : {str(self.moving_average_15m_24)}')
 
-
-
-    def update_candlestickArr_1m_and_checking_MACDhist_per1s_thr(self):
-        try:
-            tmp_Arr = self.request_client.get_candlestick_data(symbol="BTCUSDT",
-                                                               interval=CandlestickInterval.MIN1,
-                                                               startTime=None,
-                                                               endTime=self.request_client.get_servertime(),
-                                                               limit=50)
-            self.newCandleStickArr_1m = tmp_Arr
-            self.now_price = float(self.newCandleStickArr_1m[-1].close)
-            self.macd_24.setText(str(self.now_price))
-            trash_Arr = []
-            for stick in self.newCandleStickArr_1m:
-                trash_Arr.append(float(stick.close))
-            self.closePriceNpArr_1m = np.array(trash_Arr, dtype='f8')
-            self.checking_MACDhist()
-        except:
-            print("인터넷 연결 / 서버 확인 필요")
-        threading.Timer(1, self.update_candlestickArr_1m_and_checking_MACDhist_per1s_thr).start()
-
-    def trade_in(self, position, signal=''):
-        self.del_signal(signal)
-        if self.position_is_it_long == True or self.position_is_it_short == True:
-            print("잘못된 진입입니다. 이미 포지션이 있습니다.")
-            return -1
+        #print(self.MACD_hist_is_it_below_X)
+        if self.MACD_hist_is_it_above_X == True:
+            self._MACD_hist_is_it_above_X.setChecked(True)
         else:
-            if position == 'long' and self.position_is_it_empty == True:
-                self.entrance_price = self.now_price
-                self.position_is_it_long = True
-                self.position_is_it_empty = False
-                self.position_is_it_short = False
-                print(f'{datetime.now()}  롱 포지션에 진입하였습니다. 현재가 : {self.now_price}')
-                self.MACD_long_signal = False
-            elif position == 'short' and self.position_is_it_empty == True:
-                self.entrance_price = self.now_price
-                self.position_is_it_short = True
-                self.position_is_it_empty = False
-                self.position_is_it_long = False
-                print(f'{datetime.now()}  숏 포지션에 진입하였습니다. 현재가 : {self.now_price}')
-                self.MACD_short_signal = False
+            self._MACD_hist_is_it_above_X.setChecked(False)
 
-    def trade_out(self):
-        if self.position_is_it_empty == True: #포지션이 없는가?
-            print("잘못된 청산입니다. 포지션이 없습니다.")
-            return -1
+        if self.MACD_hist_is_it_below_X == True:
+            self._MACD_hist_is_it_below_X.setChecked(True)
         else:
-            if self.position_is_it_short == True:
-                self.position_is_it_short = False
-                self.position_is_it_empty = True
-                percentage = (self.entrance_price - self.now_price)/self.entrance_price
-                self.my_money += self.my_money*percentage*20
-                print(f'{datetime.now()}  숏 포지션을 청산하였습니다. 현재가 : {self.now_price}, 차익 {percentage*100*20}%, 현재 지갑 {self.my_money}')
-            elif self.position_is_it_long == True:
-                self.position_is_it_long = False
-                self.position_is_it_empty = True
-                percentage = (self.now_price - self.entrance_price )/self.entrance_price
-                self.my_money += self.my_money*percentage*20
-                print(f'{datetime.now()}  롱 포지션을 청산하였습니다. 현재가 : {self.now_price}, 차익 {percentage*100*20}%, 현재 지갑 {self.my_money}')
+            self._MACD_hist_is_it_below_X.setChecked(False)
+
+        if self.macd_golden_bool == True:
+            self._macd_goldencross_bool.setChecked(True)
+        else:
+            self._macd_goldencross_bool.setChecked(False)
+
+        if self.macd_dead_bool == True:
+            self._macd_deadcross_bool.setChecked(True)
+        else:
+            self._macd_deadcross_bool.setChecked(False)
+
+
+        if self.RSI_is_it_above_X == True:
+            self._RSI_is_it_above_X.setChecked(True)
+        else:
+            self._RSI_is_it_above_X.setChecked(False)
+
+        if self.RSI_is_it_below_X == True:
+            self._RSI_is_it_below_X.setChecked(True)
+        else:
+            self._RSI_is_it_below_X.setChecked(False)
+
+
+        if self.ATR_band_rising == True:
+            self._ATR_band_rising.setChecked(True)
+        else:
+            self._ATR_band_rising.setChecked(False)
+
+
+        if self.ATR_band_falling == True:
+            self._ATR_band_falling.setChecked(True)
+        else:
+            self._ATR_band_falling.setChecked(False)
+
+        if self.touching_15m_20ma == True:
+            self._touching_15m_20ma.setChecked(True)
+        else:
+            self._touching_15m_20ma.setChecked(False)
+
+
+        threading.Timer(0.1, self.update_UI_thread).start()
 
     def checking_MACDhist(self):
-        macd_arr, macdsignal_arr, macdhist_arr = ta.MACD(self.closePriceNpArr_1m, fastperiod=12, slowperiod=26, signalperiod=9)
+        macd_arr, macdsignal_arr, macdhist_arr = ta.MACD(self.candloStickArrFor1m_NP, fastperiod=12, slowperiod=26, signalperiod=9)
+
+        if macdhist_arr[-2] < 0 and macdhist_arr[-1] > 0:
+            self.macd_golden_bool = True
+        if macdhist_arr[-2] > 0 and macdhist_arr[-1] < 0:
+            self.macd_dead_bool = True
         if macd_arr[-1] < 0 and macdsignal_arr[-1] < 0:
-            if macdhist_arr[-2] < 0 and macdhist_arr[-1] > 0:
-                self.MACD_long_signal = True
-            elif (abs(macdhist_arr[-3]) + abs(macdhist_arr[-2]) + abs(macdhist_arr[-1]))/3 > 1 and macdhist_arr[-2] > 0 and macdhist_arr[-1] - 2 < 0:
-                self.MACD_tradeOut_signal = True
-        elif macd_arr[-1] > 0 and macdsignal_arr[-1] > 0:
-            if macdhist_arr[-2] > 0 and macdhist_arr[-1] < 0:
-                self.MACD_short_signal = True
-            elif (abs(macdhist_arr[-3]) + abs(macdhist_arr[-2]) + abs(macdhist_arr[-1]))/3 > 1 and macdhist_arr[-2] < 0 and macdhist_arr[-1] + 2 > 0:
-                self.MACD_tradeOut_signal = True
+            self.MACD_hist_is_it_above_X = True
+            self.MACD_hist_is_it_below_X = False
+        if macd_arr[-1] > 0 and macdsignal_arr[-1] > 0:
+            self.MACD_hist_is_it_above_X = False
+            self.MACD_hist_is_it_below_X = True
 
     def main_thr(self):
         if self.closePer1m_is_it_updated ==True:
@@ -254,23 +281,16 @@ class WindowClass(QMainWindow, form_class) :
         sum_15m_20 = 0
         for price in self.newCandleStickArr_15m[-20:]:
             sum_15m_20 += float(price.close)
-        self.avg_15m_20 = sum_15m_20 / 20
+        avg_15m_20 = sum_15m_20 / 20
 
-        high = self.avg_15m_20 + (float(real[-1]) * 2)
-        low = self.avg_15m_20 - (float(real[-1]) * 2)
+        high = avg_15m_20 + (float(real[-1]) * 2)
+        low = avg_15m_20 - (float(real[-1]) * 2)
 
-        # 상방 돌파
-        if self.now_price >= high:
-            self.ATR_15m_is_it_above_X = True
-            self.ATR_15m_is_it_below_X = False
-        # 하방 돌파
-        elif self.now_price <= low:
-            self.ATR_15m_is_it_below_X = True
-            self.ATR_15m_is_it_above_X = False
-        # 중앙
-        elif self.now_price < high and self.now_price > low:
-            self.ATR_15m_is_it_above_X = False
-            self.ATR_15m_is_it_below_X = False
+        self.ATR_band_15_Top = high
+        self.ATR_band_15_bottom = low
+        self.moving_average_15m_24 = avg_15m_20
+
+
 
     def update_candlestickArr_15m_and_checking_ATR_per1s_thr(self):
         try:
@@ -284,7 +304,7 @@ class WindowClass(QMainWindow, form_class) :
 
         except Exception as e:
             print(f'에러 : {e}')
-        threading.Timer(1, self.update_candlestickArr_15m_and_checking_ATR_per1s_thr).start()
+        threading.Timer(3, self.update_candlestickArr_15m_and_checking_ATR_per1s_thr).start()
 
     def update_candlestickArr_1m_and_checking_MACDhist_per1s_thr(self):
         try:
@@ -306,23 +326,7 @@ class WindowClass(QMainWindow, form_class) :
         threading.Timer(1, self.update_candlestickArr_1m_and_checking_MACDhist_per1s_thr).start()
 
     def update_RSI_per3s_status_thr(self):
-        X_low = 35
-        X_high = 65
-        waitingTime = 20
-        RSI = ta.RSI(self.closePriceNpArr_1m, timperiod = 14)[-1]
-        if RSI < X_low:
-            self.RSI_is_it_below_X = True
-            self.RSI_is_it_above_X = False
-            print(f'{datetime.now()}  현재 RSI : {RSI}, {waitingTime}분간 롱 진입 대기, RSI_is_it_below_X = {self.RSI_is_it_below_X} ')
-            time.sleep(60*waitingTime)
-        elif RSI >= X_high and RSI <= X_low:
-            self.RSI_is_it_below_X = False
-            self.RSI_is_it_above_X = False
-        elif RSI > X_high:
-            self.RSI_is_it_below_X = False
-            self.RSI_is_it_above_X = True
-            print(f'{datetime.now()}  현재 RSI : {RSI}, {waitingTime}분간 숏 진입 대기, RSI_is_it_above_X = {self.RSI_is_it_above_X}')
-            time.sleep(60*waitingTime)
+        self.RSI = float(ta.RSI(self.candloStickArrFor1m_NP, timperiod=14)[-1])
         threading.Timer(3, self.update_RSI_per3s_status_thr).start()
 
     def update_closePrice_per1m_thr(self):
@@ -331,10 +335,6 @@ class WindowClass(QMainWindow, form_class) :
         #print(f'{datetime.now()}  1분봉 종가 업데이트 {self.close_price_1m}, self.closePer1m_is_it_updated = {self.closePer1m_is_it_updated}')
         threading.Timer((60 - datetime.now().second), self.update_closePrice_per1m_thr).start() #1분마다 재귀함수 쓰레드를 반복시킨다.
 
-    def update_ATR_position_tradeOut_signal_per1s_thr(self): #시그널은 트루만 주고 펄스주는건 따로
-        if self.now_price < self.avg_15m_20 + self.avg_15m_20 * 0.01 and self.now_price > self.avg_15m_20 - self.avg_15m_20 * 0.01:
-            self.ATR_tradeOut_signal = True
-        threading.Timer(1, self.update_ATR_position_tradeOut_signal_per1s_thr).start()
 
     def what_time_is(self):
         serverTime = self.request_client.get_servertime()
@@ -358,9 +358,56 @@ class WindowClass(QMainWindow, form_class) :
             self.ATR_tradeOut_signal = False
 
 
+    def trade_in(self, position, signal=''):
+        self.del_signal(signal)
+        if self.position_is_it_long == True or self.position_is_it_short == True:
+            print("잘못된 진입입니다. 이미 포지션이 있습니다.")
+            return -1
+        else:
+            if position == 'long' and self.position_is_it_empty == True:
+                self.entrance_price = self.now_price
+                self.position_is_it_long = True
+                self.position_is_it_empty = False
+                self.position_is_it_short = False
+                print(f'{datetime.now()}  롱 포지션에 진입하였습니다. 현재가 : {self.now_price}')
+                self.MACD_long_signal = False
+            elif position == 'short' and self.position_is_it_empty == True:
+                self.entrance_price = self.now_price
+                self.position_is_it_short = True
+                self.position_is_it_empty = False
+                self.position_is_it_long = False
+                print(f'{datetime.now()}  숏 포지션에 진입하였습니다. 현재가 : {self.now_price}')
+                self.MACD_short_signal = False
+
+    def trade_out(self):
+        if self.position_is_it_empty == True: #포지션이 없는가?
+            print("잘못된 청산입니다. 포지션이 없습니다.")
+            return -1
+        else:
+            if self.position_is_it_short == True:
+                self.position_is_it_short = False
+                self.position_is_it_empty = True
+                percentage = (self.entrance_price - self.now_price)/self.entrance_price
+                self.my_money += self.my_money*percentage*20
+                print(f'{datetime.now()}  숏 포지션을 청산하였습니다. 현재가 : {self.now_price}, 차익 {percentage*100*20}%, 현재 지갑 {self.my_money}')
+            elif self.position_is_it_long == True:
+                self.position_is_it_long = False
+                self.position_is_it_empty = True
+                percentage = (self.now_price - self.entrance_price )/self.entrance_price
+                self.my_money += self.my_money*percentage*20
+                print(f'{datetime.now()}  롱 포지션을 청산하였습니다. 현재가 : {self.now_price}, 차익 {percentage*100*20}%, 현재 지갑 {self.my_money}')
+
+
 
 if __name__ == "__main__" :
     app = QApplication(sys.argv)
-    myWindow = WindowClass()
+    myWindow = Main()
+    myWindow.show()
+    app.exec_()
+
+
+if __name__ == "__main__" :
+    app = QApplication(sys.argv)
+    myWindow = Main()
     myWindow.show()
     app.exec_()
