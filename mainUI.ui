@@ -18,7 +18,7 @@
     <rect>
      <x>50</x>
      <y>60</y>
-     <width>151</width>
+     <width>211</width>
      <height>491</height>
     </rect>
    </property>
@@ -32,6 +32,13 @@
     </item>
     <item>
      <widget class="QLabel" name="_macd_hist">
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="_macd_hist_prev">
       <property name="text">
        <string>TextLabel</string>
       </property>
@@ -84,7 +91,7 @@
   <widget class="QWidget" name="verticalLayoutWidget_2">
    <property name="geometry">
     <rect>
-     <x>250</x>
+     <x>290</x>
      <y>60</y>
      <width>181</width>
      <height>491</height>
@@ -92,16 +99,16 @@
    </property>
    <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
-     <widget class="QCheckBox" name="_MACD_hist_is_it_above_X">
+     <widget class="QCheckBox" name="_MACD_is_it_above_X">
       <property name="text">
-       <string>MACD_hist_is_it_above_X</string>
+       <string>MACD_is_it_above_X</string>
       </property>
      </widget>
     </item>
     <item>
-     <widget class="QCheckBox" name="_MACD_hist_is_it_below_X">
+     <widget class="QCheckBox" name="_MACD_is_it_below_X">
       <property name="text">
-       <string>MACD_hist_is_it_below_X</string>
+       <string>MACD_is_it_below_X</string>
       </property>
      </widget>
     </item>
@@ -159,7 +166,7 @@
   <widget class="QWidget" name="verticalLayoutWidget_3">
    <property name="geometry">
     <rect>
-     <x>460</x>
+     <x>510</x>
      <y>60</y>
      <width>201</width>
      <height>491</height>
@@ -220,7 +227,7 @@
   <widget class="QWidget" name="verticalLayoutWidget_4">
    <property name="geometry">
     <rect>
-     <x>690</x>
+     <x>750</x>
      <y>60</y>
      <width>151</width>
      <height>241</height>
