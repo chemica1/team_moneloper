@@ -66,11 +66,12 @@ class Main(QMainWindow, form_class) :
         self.update_candlestickArrFor1m_per1s_thr()
         self.update_candlestickArrFor15m_per1s_thr()
 
-        self.update_MACDhist_thr()
-        self.update_RSI_thr()
-        self.update_ATR_thr()
+        threading.Timer(1, self.update_MACDhist_thr).start()
+        threading.Timer(1, self.update_RSI_thr).start()
+        threading.Timer(1, self.update_ATR_thr).start()
 
-        self.update_UI_thr()
+        threading.Timer(2, self.check_bools_and_update_signal_thr).start()
+        threading.Timer(2, self.update_UI_thr).start()
         #self.main_thr()
 
     def update_candlestickArrFor15m_per1s_thr(self):
@@ -163,12 +164,16 @@ class Main(QMainWindow, form_class) :
         if self.RSI < X_low:
             self.RSI_is_it_below_X = True
             self.RSI_is_it_above_X = False
-        elif self.RSI >= X_high and self.RSI <= X_low:
+            print(f'{self.RSI} 모드로 15분간 대기')
+            time.sleep(60*15)
+        elif self.RSI >= X_low and self.RSI <= X_high:
             self.RSI_is_it_below_X = False
             self.RSI_is_it_above_X = False
         elif self.RSI > X_high:
             self.RSI_is_it_below_X = False
             self.RSI_is_it_above_X = True
+            print(f'{self.RSI} 모드로 15분간 대기')
+            time.sleep(60*15)
 
     def checking_ATR(self):
         price_high = []
@@ -198,8 +203,24 @@ class Main(QMainWindow, form_class) :
         self.ATR_band_15_bottom = low
         self.moving_average_15m_24 = avg_15m_20
 
-    def update_signal_thr(self):
-        
+    def check_bools_and_update_signal_thr(self): #시그널을 끄는것은 트레이드쓰레드가 할 것
+        if self.MACD_is_it_above_X == True and self.macd_dead_bool == True and self.RSI_is_it_above_X == True:
+            self.macd_enter_short_signal = True
+        if self.MACD_is_it_below_X == True and self.macd_golden_bool == True and self.RSI_is_it_below_X == True:
+            self.macd_enter_long_signal = True
+        if self.MACD_is_it_above_X == True and self.macd_golden_bool == True:
+            self.macd_exit_short_signal = True
+        if self.MACD_is_it_below_X == True and self.macd_dead_bool == True:
+            self.macd_exit_long_signal = True
+        if self.ATR_band_rising == True:
+            self.ATR_long_signal = True
+        if self.ATR_band_falling == True:
+            self.ATR_short_signal = True
+        if self.touching_15m_20ma == True:
+            self.touching_15m_20ma_signal = True
+
+        threading.Timer(1, self.check_bools_and_update_signal_thr).start()
+
 
     def update_UI_thr(self):
         self._now_price.setText(f'현재가 : {str(self.now_price)}')
@@ -212,51 +233,75 @@ class Main(QMainWindow, form_class) :
         self._ATR_band_15_bottom.setText(f'ATR_bottom : {str(self.ATR_band_15_bottom)}')
         self._moving_average_15m_24.setText(f'mv_15m : {str(self.moving_average_15m_24)}')
 
-        #print(self.MACD_is_it_below_X)
+        #signals UI update
+
         if self.MACD_is_it_above_X == True:
             self._MACD_is_it_above_X.setChecked(True)
         else:
             self._MACD_is_it_above_X.setChecked(False)
-
         if self.MACD_is_it_below_X == True:
             self._MACD_is_it_below_X.setChecked(True)
         else:
             self._MACD_is_it_below_X.setChecked(False)
-
         if self.macd_golden_bool == True:
             self._macd_goldencross_bool.setChecked(True)
         else:
             self._macd_goldencross_bool.setChecked(False)
-
         if self.macd_dead_bool == True:
             self._macd_deadcross_bool.setChecked(True)
         else:
             self._macd_deadcross_bool.setChecked(False)
-
         if self.RSI_is_it_above_X == True:
             self._RSI_is_it_above_X.setChecked(True)
         else:
             self._RSI_is_it_above_X.setChecked(False)
-
         if self.RSI_is_it_below_X == True:
             self._RSI_is_it_below_X.setChecked(True)
         else:
             self._RSI_is_it_below_X.setChecked(False)
-
         if self.ATR_band_rising == True:
             self._ATR_band_rising.setChecked(True)
         else:
             self._ATR_band_rising.setChecked(False)
-
         if self.ATR_band_falling == True:
             self._ATR_band_falling.setChecked(True)
         else:
             self._ATR_band_falling.setChecked(False)
-
         if self.touching_15m_20ma == True:
             self._touching_15m_20ma.setChecked(True)
         else:
             self._touching_15m_20ma.setChecked(False)
+
+        #signals UI update
+
+        if self.macd_enter_short_signal == True:
+            self._macd_enter_short_signal.setChecked(True)
+        else:
+            self._macd_enter_short_signal.setChecked(False)
+        if self.macd_enter_long_signal == True:
+            self._macd_enter_long_signal.setChecked(True)
+        else:
+            self._macd_enter_long_signal.setChecked(False)
+        if self.macd_exit_short_signal == True:
+            self._macd_exit_short_signal.setChecked(True)
+        else:
+            self._macd_exit_short_signal.setChecked(False)
+        if self.macd_exit_long_signal == True:
+            self._macd_exit_long_signal.setChecked(True)
+        else:
+            self._macd_exit_long_signal.setChecked(False)
+        if self.ATR_long_signal == True:
+            self._ATR_long_signal.setChecked(True)
+        else:
+            self._ATR_long_signal.setChecked(False)
+        if self.ATR_short_signal == True:
+            self._ATR_short_signal.setChecked(True)
+        else:
+            self._ATR_short_signal.setChecked(False)
+        if self.touching_15m_20ma_signal == True:
+            self._touching_15m_20ma_signal.setChecked(True)
+        else:
+            self._touching_15m_20ma_signal.setChecked(False)
 
         threading.Timer(0.1, self.update_UI_thr).start()
 
