@@ -19,17 +19,20 @@ class Main(QMainWindow, form_class) :
         super().__init__()
         self.setupUi(self)
         self.api_key = keys()
-        self.request_client = RequestClient(api_key=self.api_key, secret_key="")
+        self.request_client = RequestClient(api_key=self.api_key.api_key(), secret_key=self.api_key.secret_key())
         # self.File_class = File_class('2020_05')
         self.init_vars()
         self.init_status_bools()
         self.init_signals_bools()
         self.init_update_threads()
+        self.init_trade_threads()
+
 
     def init_vars(self):
-        self.my_money = 1000
+        self.my_money = self.get_balance()
         self.now_price = 0
         self.macd_hist = 0
+        self.macd_hist_prev = 0
         self.macd_12 = 0
         self.macd_26 = 0
         self.RSI = 0
@@ -37,7 +40,7 @@ class Main(QMainWindow, form_class) :
         self.ATR_band_15_bottom = 0
         self.moving_average_15m_24 = 0
         self.candleStickArrFor1m = []
-        self.candloStickArrFor1m_NP = []
+        self.candleStickArrFor1m_NP = []
 
     def init_status_bools(self):
         self.MACD_is_it_above_X = False
@@ -60,101 +63,107 @@ class Main(QMainWindow, form_class) :
         self.touching_15m_20ma_signal = False
 
     def init_trade_threads(self):
-        self.no_position_thread()
+        threading.Timer(0.5, self.no_position_thread).start()
 
     def init_update_threads(self):
-        self.update_candlestickArrFor1m_per1s_thr()
-        self.update_candlestickArrFor15m_per1s_thr()
+        threading.Timer(0.01, self.update_candlestickArrFor1m_per1s_thr).start()
+        threading.Timer(0.01, self.update_candlestickArrFor15m_per1s_thr).start()
 
-        threading.Timer(1, self.update_MACDhist_thr).start()
-        threading.Timer(1, self.update_RSI_thr).start()
-        threading.Timer(1, self.update_ATR_thr).start()
+        threading.Timer(5, self.update_MACDhist_thr).start()
+        threading.Timer(5, self.update_RSI_thr).start()
+        threading.Timer(5, self.update_ATR_thr).start()
 
         threading.Timer(2, self.check_bools_and_update_signal_thr).start()
         threading.Timer(2, self.update_UI_thr).start()
         #self.main_thr()
 
     def update_candlestickArrFor15m_per1s_thr(self):
-        try:
-            tmp_Arr = self.request_client.get_candlestick_data(symbol="BTCUSDT",
-                                                               interval=CandlestickInterval.MIN15,
-                                                               startTime=None,
-                                                               endTime=self.request_client.get_servertime(),
-                                                               limit=50)
-            self.newCandleStickArr_15m = tmp_Arr
+        while True:
+            try:
+                tmp_Arr = self.request_client.get_candlestick_data(symbol="BTCUSDT",
+                                                                   interval=CandlestickInterval.MIN15,
+                                                                   startTime=None,
+                                                                   endTime=self.request_client.get_servertime(),
+                                                                   limit=50)
+                self.newCandleStickArr_15m = tmp_Arr
 
-        except Exception as e:
-            print(f'에러 : {e}')
-        threading.Timer(3, self.update_candlestickArrFor15m_per1s_thr).start()
+            except Exception as e:
+                print(f'에러 : {e}')
+            time.sleep(3)
 
     def update_candlestickArrFor1m_per1s_thr(self):
-        try:
-            self.candleStickArrFor1m = self.request_client.get_candlestick_data(symbol="BTCUSDT",
-                                                               interval=CandlestickInterval.MIN1,
-                                                               startTime=None,
-                                                               endTime=self.request_client.get_servertime(),
-                                                               limit=50)
-            trash_Arr = []
-            for stick in self.candleStickArrFor1m:
-                trash_Arr.append(float(stick.close))
-            self.candloStickArrFor1m_NP = np.array(trash_Arr, dtype='f8')
-            self.now_price = float(self.candleStickArrFor1m[-1].close)
-        except Exception as e:
-            print(f'에러 : {e}')
-            print("인터넷 연결 / 서버 확인 필요")
-        threading.Timer(1, self.update_candlestickArrFor1m_per1s_thr).start()
+        while True:
+            try:
+                self.candleStickArrFor1m = self.request_client.get_candlestick_data(symbol="BTCUSDT",
+                                                                   interval=CandlestickInterval.MIN1,
+                                                                   startTime=None,
+                                                                   endTime=self.request_client.get_servertime(),
+                                                                   limit=50)
+                trash_Arr = []
+                for stick in self.candleStickArrFor1m:
+                    trash_Arr.append(float(stick.close))
+                self.candleStickArrFor1m_NP = np.array(trash_Arr, dtype='f8')
+                self.now_price = float(self.candleStickArrFor1m[-1].close)
+            except Exception as e:
+                print(f'에러 : {e}')
+                print("인터넷 연결 / 서버 확인 필요")
+            time.sleep(1)
 
     def update_MACDhist_thr(self): #macd 값들 ta라이브러리로 넘파이 배열을 넣어서 전역변수에 넣어준다.
-        macd_12Arr, macd_26Arr, macd_histArr = ta.MACD(self.candloStickArrFor1m_NP, fastperiod=12, slowperiod=26,
-                                                         signalperiod=9)
-        self.macd_12 = float(macd_12Arr[-1])
-        self.macd_26 = float(macd_26Arr[-1])
-        self.macd_hist = float(macd_histArr[-1])
-        self.macd_hist_prev = float(macd_histArr[-2])
+        while True:
+            macd_12Arr, macd_26Arr, macd_histArr = ta.MACD(self.candleStickArrFor1m_NP, fastperiod=12, slowperiod=26,
+                                                             signalperiod=9)
+            self.macd_12 = float(macd_12Arr[-1])
+            self.macd_26 = float(macd_26Arr[-1])
+            self.macd_hist = float(macd_histArr[-1])
+            self.macd_hist_prev = float(macd_histArr[-2])
 
-        self.checking_MACDhist()
-
-        threading.Timer(1, self.update_MACDhist_thr).start()
+            self.checking_MACDhist()
+            time.sleep(0.5)
 
     def update_RSI_thr(self):
-        self.RSI = float(ta.RSI(self.candloStickArrFor1m_NP, timperiod=14)[-1])
-        self.checking_RSI()
-
-        threading.Timer(1, self.update_RSI_thr).start()
+        while True:
+            self.RSI = float(ta.RSI(self.candleStickArrFor1m_NP, timperiod=14)[-1])
+            self.checking_RSI()
+            time.sleep(0.5)
 
     def update_ATR_thr(self):
-        self.checking_ATR()
-        # 상방 돌파
-        if self.now_price >= self.ATR_band_15_Top:
-            self.ATR_band_rising = True
-            self.ATR_band_falling = False
-        # 하방 돌파
-        elif self.now_price <= self.ATR_band_15_bottom:
-            self.ATR_band_falling = True
-            self.ATR_band_rising = False
-        # 중앙
-        elif self.now_price < self.ATR_band_15_Top and self.now_price > self.ATR_band_15_bottom:
-            self.ATR_band_rising = False
-            self.ATR_band_falling = False
+        while True:
+            self.checking_ATR()
+            # 상방 돌파
+            if self.now_price >= self.ATR_band_15_Top:
+                self.ATR_band_rising = True
+                self.ATR_band_falling = False
+            # 하방 돌파
+            elif self.now_price <= self.ATR_band_15_bottom:
+                self.ATR_band_falling = True
+                self.ATR_band_rising = False
+            # 중앙
+            elif self.now_price < self.ATR_band_15_Top and self.now_price > self.ATR_band_15_bottom:
+                self.ATR_band_rising = False
+                self.ATR_band_falling = False
 
-        if self.now_price == self.moving_average_15m_24:
-            self.touching_15m_20ma = True
-
-        threading.Timer(0.1, self.update_ATR_thr).start()
+            if self.now_price > self.moving_average_15m_24 - (self.moving_average_15m_24 * 0.002) and self.now_price < self.moving_average_15m_24 + (self.moving_average_15m_24 * 0.002):
+                self.touching_15m_20ma = True
+            time.sleep(0.1)
 
     def checking_MACDhist(self):
-        macd_arr, macdsignal_arr, macdhist_arr = ta.MACD(self.candloStickArrFor1m_NP, fastperiod=12, slowperiod=26, signalperiod=9)
+        macd_arr, macdsignal_arr, macdhist_arr = ta.MACD(self.candleStickArrFor1m_NP, fastperiod=12, slowperiod=26, signalperiod=9)
 
         if macdhist_arr[-2] < 0 and macdhist_arr[-1] > 0:
             self.macd_golden_bool = True
             self.macd_dead_bool = False
-        if macdhist_arr[-2] > 0 and macdhist_arr[-1] < 0:
+        elif macdhist_arr[-2] > 0 and macdhist_arr[-1] < 0:
             self.macd_dead_bool = True
+            self.macd_golden_bool = False
+        else:
             self.macd_dead_bool = False
+            self.macd_golden_bool = False
+
         if macd_arr[-1] < 0 and macdsignal_arr[-1] < 0:
             self.MACD_is_it_above_X = False
             self.MACD_is_it_below_X = True
-        if macd_arr[-1] > 0 and macdsignal_arr[-1] > 0:
+        elif macd_arr[-1] > 0 and macdsignal_arr[-1] > 0:
             self.MACD_is_it_above_X = True
             self.MACD_is_it_below_X = False
 
@@ -204,107 +213,274 @@ class Main(QMainWindow, form_class) :
         self.moving_average_15m_24 = avg_15m_20
 
     def check_bools_and_update_signal_thr(self): #시그널을 끄는것은 트레이드쓰레드가 할 것
-        if self.MACD_is_it_above_X == True and self.macd_dead_bool == True and self.RSI_is_it_above_X == True:
-            self.macd_enter_short_signal = True
-        if self.MACD_is_it_below_X == True and self.macd_golden_bool == True and self.RSI_is_it_below_X == True:
-            self.macd_enter_long_signal = True
-        if self.MACD_is_it_above_X == True and self.macd_golden_bool == True:
-            self.macd_exit_short_signal = True
-        if self.MACD_is_it_below_X == True and self.macd_dead_bool == True:
-            self.macd_exit_long_signal = True
-        if self.ATR_band_rising == True:
-            self.ATR_long_signal = True
-        if self.ATR_band_falling == True:
-            self.ATR_short_signal = True
-        if self.touching_15m_20ma == True:
-            self.touching_15m_20ma_signal = True
-
-        threading.Timer(1, self.check_bools_and_update_signal_thr).start()
-
+        while(1):
+            if self.MACD_is_it_above_X == True and self.macd_dead_bool == True and self.RSI_is_it_above_X == True:
+                self.macd_enter_short_signal = True
+            if self.MACD_is_it_below_X == True and self.macd_golden_bool == True and self.RSI_is_it_below_X == True:
+                self.macd_enter_long_signal = True
+            if self.MACD_is_it_above_X == True and self.macd_golden_bool == True:
+                self.macd_exit_short_signal = True
+            if self.MACD_is_it_below_X == True and self.macd_dead_bool == True:
+                self.macd_exit_long_signal = True
+            if self.ATR_band_rising == True:
+                self.ATR_long_signal = True
+            if self.ATR_band_falling == True:
+                self.ATR_short_signal = True
+            if self.touching_15m_20ma == True:
+                self.touching_15m_20ma_signal = True
+            time.sleep(0.1)
 
     def update_UI_thr(self):
-        self._now_price.setText(f'현재가 : {str(self.now_price)}')
-        self._macd_12.setText(f'macd(12) : {str(self.macd_12)}')
-        self._macd_26.setText(f'macd(26) : {str(self.macd_26)}')
-        self._macd_hist.setText(f'macd_hist : {str(self.macd_hist)}')
-        self._macd_hist_prev.setText(f'macd_hist_prev : {str(self.macd_hist_prev)}')
-        self._RSI.setText(f'RSI : {str(self.RSI)}')
-        self._ATR_band_15_Top.setText(f'ATR_Top : {str(self.ATR_band_15_Top)}')
-        self._ATR_band_15_bottom.setText(f'ATR_bottom : {str(self.ATR_band_15_bottom)}')
-        self._moving_average_15m_24.setText(f'mv_15m : {str(self.moving_average_15m_24)}')
+        while True:
+            self._now_price.setText(f'현재가 : {str(self.now_price)}')
+            self._macd_12.setText(f'macd(12) : {str(self.macd_12)}')
+            self._macd_26.setText(f'macd(26) : {str(self.macd_26)}')
+            self._macd_hist.setText(f'macd_hist : {str(self.macd_hist)}')
+            self._macd_hist_prev.setText(f'macd_hist_prev : {str(self.macd_hist_prev)}')
+            self._RSI.setText(f'RSI : {str(self.RSI)}')
+            self._ATR_band_15_Top.setText(f'ATR_Top : {str(self.ATR_band_15_Top)}')
+            self._ATR_band_15_bottom.setText(f'ATR_bottom : {str(self.ATR_band_15_bottom)}')
+            self._moving_average_15m_24.setText(f'mv_15m : {str(self.moving_average_15m_24)}')
+            self._my_money.setText(f'{str(self.my_money)}')
 
-        #signals UI update
+            #signals UI update
 
-        if self.MACD_is_it_above_X == True:
-            self._MACD_is_it_above_X.setChecked(True)
-        else:
-            self._MACD_is_it_above_X.setChecked(False)
-        if self.MACD_is_it_below_X == True:
-            self._MACD_is_it_below_X.setChecked(True)
-        else:
-            self._MACD_is_it_below_X.setChecked(False)
-        if self.macd_golden_bool == True:
-            self._macd_goldencross_bool.setChecked(True)
-        else:
-            self._macd_goldencross_bool.setChecked(False)
-        if self.macd_dead_bool == True:
-            self._macd_deadcross_bool.setChecked(True)
-        else:
-            self._macd_deadcross_bool.setChecked(False)
-        if self.RSI_is_it_above_X == True:
-            self._RSI_is_it_above_X.setChecked(True)
-        else:
-            self._RSI_is_it_above_X.setChecked(False)
-        if self.RSI_is_it_below_X == True:
-            self._RSI_is_it_below_X.setChecked(True)
-        else:
-            self._RSI_is_it_below_X.setChecked(False)
-        if self.ATR_band_rising == True:
-            self._ATR_band_rising.setChecked(True)
-        else:
-            self._ATR_band_rising.setChecked(False)
-        if self.ATR_band_falling == True:
-            self._ATR_band_falling.setChecked(True)
-        else:
-            self._ATR_band_falling.setChecked(False)
-        if self.touching_15m_20ma == True:
-            self._touching_15m_20ma.setChecked(True)
-        else:
-            self._touching_15m_20ma.setChecked(False)
+            if self.MACD_is_it_above_X == True:
+                self._MACD_is_it_above_X.setChecked(True)
+            else:
+                self._MACD_is_it_above_X.setChecked(False)
+            if self.MACD_is_it_below_X == True:
+                self._MACD_is_it_below_X.setChecked(True)
+            else:
+                self._MACD_is_it_below_X.setChecked(False)
+            if self.macd_golden_bool == True:
+                self._macd_goldencross_bool.setChecked(True)
+            else:
+                self._macd_goldencross_bool.setChecked(False)
+            if self.macd_dead_bool == True:
+                self._macd_deadcross_bool.setChecked(True)
+            else:
+                self._macd_deadcross_bool.setChecked(False)
+            if self.RSI_is_it_above_X == True:
+                self._RSI_is_it_above_X.setChecked(True)
+            else:
+                self._RSI_is_it_above_X.setChecked(False)
+            if self.RSI_is_it_below_X == True:
+                self._RSI_is_it_below_X.setChecked(True)
+            else:
+                self._RSI_is_it_below_X.setChecked(False)
+            if self.ATR_band_rising == True:
+                self._ATR_band_rising.setChecked(True)
+            else:
+                self._ATR_band_rising.setChecked(False)
+            if self.ATR_band_falling == True:
+                self._ATR_band_falling.setChecked(True)
+            else:
+                self._ATR_band_falling.setChecked(False)
+            if self.touching_15m_20ma == True:
+                self._touching_15m_20ma.setChecked(True)
+            else:
+                self._touching_15m_20ma.setChecked(False)
 
-        #signals UI update
+            #signals UI update
 
-        if self.macd_enter_short_signal == True:
-            self._macd_enter_short_signal.setChecked(True)
-        else:
-            self._macd_enter_short_signal.setChecked(False)
-        if self.macd_enter_long_signal == True:
-            self._macd_enter_long_signal.setChecked(True)
-        else:
-            self._macd_enter_long_signal.setChecked(False)
-        if self.macd_exit_short_signal == True:
-            self._macd_exit_short_signal.setChecked(True)
-        else:
-            self._macd_exit_short_signal.setChecked(False)
-        if self.macd_exit_long_signal == True:
-            self._macd_exit_long_signal.setChecked(True)
-        else:
-            self._macd_exit_long_signal.setChecked(False)
-        if self.ATR_long_signal == True:
-            self._ATR_long_signal.setChecked(True)
-        else:
-            self._ATR_long_signal.setChecked(False)
-        if self.ATR_short_signal == True:
-            self._ATR_short_signal.setChecked(True)
-        else:
-            self._ATR_short_signal.setChecked(False)
-        if self.touching_15m_20ma_signal == True:
-            self._touching_15m_20ma_signal.setChecked(True)
-        else:
-            self._touching_15m_20ma_signal.setChecked(False)
+            if self.macd_enter_short_signal == True:
+                self._macd_enter_short_signal.setChecked(True)
+            else:
+                self._macd_enter_short_signal.setChecked(False)
+            if self.macd_enter_long_signal == True:
+                self._macd_enter_long_signal.setChecked(True)
+            else:
+                self._macd_enter_long_signal.setChecked(False)
+            if self.macd_exit_short_signal == True:
+                self._macd_exit_short_signal.setChecked(True)
+            else:
+                self._macd_exit_short_signal.setChecked(False)
+            if self.macd_exit_long_signal == True:
+                self._macd_exit_long_signal.setChecked(True)
+            else:
+                self._macd_exit_long_signal.setChecked(False)
+            if self.ATR_long_signal == True:
+                self._ATR_long_signal.setChecked(True)
+            else:
+                self._ATR_long_signal.setChecked(False)
+            if self.ATR_short_signal == True:
+                self._ATR_short_signal.setChecked(True)
+            else:
+                self._ATR_short_signal.setChecked(False)
+            if self.touching_15m_20ma_signal == True:
+                self._touching_15m_20ma_signal.setChecked(True)
+            else:
+                self._touching_15m_20ma_signal.setChecked(False)
 
-        threading.Timer(0.1, self.update_UI_thr).start()
+            time.sleep(0.05)
 
+    def no_position_thread(self):
+        flag = 1
+        while flag == 1:
+            self._now_position.setText('no_position_thread')
+            if self.macd_enter_long_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : macd_enter_long_signal BUY")
+                self.post_order("BUY")
+                threading.Timer(1, self.macd_long_thread).start()
+                flag = 0
+            elif self.macd_enter_short_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : macd_enter_short_signal  SELL")
+                self.post_order("SELL")
+                threading.Timer(1, self.macd_short_thread).start()
+                flag = 0
+            elif self.ATR_long_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : ATR_long_signal BUY")
+                self.post_order("BUY")
+                threading.Timer(1, self.ATR_long_thread).start()
+                flag = 0
+            elif self.ATR_short_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : ATR_short_signal  SELL")
+                self.post_order("SELL")
+                threading.Timer(1, self.ATR_short_thread).start()
+                flag = 0
+
+            #이 포지션에선 필요없는 것
+            if self.macd_exit_long_signal == True:
+                self.macd_exit_long_signal = False
+            if self.macd_exit_short_signal == True:
+                self.macd_exit_short_signal = False
+            if self.touching_15m_20ma_signal == True:
+                self.touching_15m_20ma_signal = False
+            time.sleep(0.05)
+
+    def macd_long_thread(self):
+        flag = 1
+        while flag == 1:
+            self._now_position.setText(f'macd_long_thread')
+            if self.macd_exit_long_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : macd_exit_long_signal  SELL")
+                self.post_order("SELL")
+                threading.Timer(1, self.no_position_thread).start()
+                flag = 0
+            elif self.macd_enter_short_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : macd_enter_short_signal  SELL")
+                self.post_order("SELL")
+                threading.Timer(1, self.no_position_thread).start()
+                flag = 0
+            elif self.ATR_long_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : ATR_long_signal")
+                threading.Timer(1, self.ATR_long_thread).start()
+                flag = 0
+            elif self.ATR_short_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : ATR_short_signal  SELL")
+                self.post_order("SELL")
+                self.post_order("SELL")
+                threading.Timer(1, self.ATR_short_thread).start()
+                flag = 0
+
+            # 이 포지션에선 필요없는 것
+            if self.macd_enter_long_signal == True:
+                self.macd_enter_long_signal = False
+            if self.macd_exit_short_signal == True:
+                self.macd_exit_short_signal = False
+            if self.touching_15m_20ma_signal == True:
+                self.touching_15m_20ma_signal = False
+            time.sleep(0.05)
+
+    def macd_short_thread(self):
+        flag = 1
+        while flag == 1:
+            self._now_position.setText(f'macd_short_thread')
+            if self.macd_exit_short_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : macd_exit_short_signal  BUY")
+                self.post_order("BUY")
+                threading.Timer(1, self.no_position_thread).start()
+                flag = 0
+            elif self.macd_enter_long_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : macd_enter_long_signal  BUY")
+                self.post_order("BUY")
+                threading.Timer(1, self.no_position_thread).start()
+                flag = 0
+            elif self.ATR_long_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : ATR_long_signal  BUY")
+                self.post_order("BUY")
+                self.post_order("BUY")
+                threading.Timer(1, self.ATR_long_thread).start()
+                flag = 0
+            elif self.ATR_short_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : ATR_short_signal")
+                threading.Timer(1, self.ATR_short_thread).start()
+                flag = 0
+
+            # 이 포지션에선 필요없는 것
+            if self.macd_enter_short_signal == True:
+                self.macd_enter_short_signal = False
+            if self.macd_exit_long_signal == True:
+                self.macd_exit_long_signal = False
+            if self.touching_15m_20ma_signal == True:
+                self.touching_15m_20ma_signal = False
+            time.sleep(0.05)
+
+    def ATR_long_thread(self):
+        flag = 1
+        while flag == 1:
+            self._now_position.setText(f'ATR_long_thread')
+            if self.touching_15m_20ma_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : touching_15m_20ma_signal  SELL")
+                self.post_order("SELL")
+                threading.Timer(1, self.no_position_thread).start()
+                flag = 0
+
+            # 이 포지션에선 필요없는 것
+            if self.macd_enter_long_signal == True:
+                self.macd_enter_long_signal = False
+            if self.macd_enter_short_signal == True:
+                self.macd_enter_short_signal = False
+            if self.macd_exit_long_signal == True:
+                self.macd_exit_long_signal = False
+            if self.macd_exit_short_signal == True:
+                self.macd_exit_short_signal = False
+            if self.ATR_long_signal == True:
+                self.ATR_long_signal = False
+            if self.ATR_short_signal == True:
+                self.ATR_short_signal = False
+            time.sleep(0.05)
+
+
+    def ATR_short_thread(self):
+        flag = 1
+        while flag == 1:
+            self._now_position.setText(f'ATR_short_thread')
+            if self.touching_15m_20ma_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : touching_15m_20ma_signal  BUY")
+                self.post_order("BUY")
+                threading.Timer(1, self.no_position_thread).start()
+                flag = 0
+
+            # 이 포지션에선 필요없는 것
+            if self.macd_enter_long_signal == True:
+                self.macd_enter_long_signal = False
+            if self.macd_enter_short_signal == True:
+                self.macd_enter_short_signal = False
+            if self.macd_exit_long_signal == True:
+                self.macd_exit_long_signal = False
+            if self.macd_exit_short_signal == True:
+                self.macd_exit_short_signal = False
+            if self.ATR_long_signal == True:
+                self.ATR_long_signal = False
+            if self.ATR_short_signal == True:
+                self.ATR_short_signal = False
+
+    def get_balance(self):
+        result = self.request_client.get_balance()
+        return result[0].balance
+
+    def post_order(self, side, order_type="MARKET", quantity=0.001):
+        if side == "BUY" and order_type == "MARKET":
+            result = self.request_client.post_order(symbol="BTCUSDT", side=OrderSide.BUY,
+                                                    ordertype=OrderType.MARKET, quantity=quantity)
+        elif side == "SELL" and order_type == "MARKET":
+            result = self.request_client.post_order(symbol="BTCUSDT", side=OrderSide.SELL,
+                                                    ordertype=OrderType.MARKET, quantity=quantity)
+        self.my_money = self.get_balance()
+
+'''
     def main_thr(self):
         if self.closePer1m_is_it_updated ==True:
             print(f'{datetime.now()} : 종가가 업데이트 됐으므로 알고리즘 작동')
@@ -420,8 +596,9 @@ class Main(QMainWindow, form_class) :
                 percentage = (self.now_price - self.entrance_price )/self.entrance_price
                 self.my_money += self.my_money*percentage*20
                 print(f'{datetime.now()}  롱 포지션을 청산하였습니다. 현재가 : {self.now_price}, 차익 {percentage*100*20}%, 현재 지갑 {self.my_money}')
-
+'''
 if __name__ == "__main__" :
+    sys.setrecursionlimit(5000)
     app = QApplication(sys.argv)
     myWindow = Main()
     myWindow.show()
