@@ -27,7 +27,6 @@ class Main(QMainWindow, form_class) :
         self.init_update_threads()
         self.init_trade_threads()
 
-
     def init_vars(self):
         self.my_money = self.get_balance()
         self.now_price = 0
@@ -38,9 +37,14 @@ class Main(QMainWindow, form_class) :
         self.RSI = 0
         self.ATR_band_15_Top = 0
         self.ATR_band_15_bottom = 0
-        self.moving_average_15m_24 = 0
+        self.moving_average_15m_7 = 0
+        self.moving_average_15m_20 = 0
         self.candleStickArrFor1m = []
         self.candleStickArrFor1m_NP = []
+
+        self.moving_average_15m_7_constant = 0.002
+        self.RSI_is_it_below_X_constant = 35
+        self.RSI_is_it_above_X_constant = 65
 
     def init_status_bools(self):
         self.MACD_is_it_above_X = False
@@ -60,7 +64,9 @@ class Main(QMainWindow, form_class) :
         self.macd_exit_long_signal = False
         self.ATR_long_signal = False
         self.ATR_short_signal = False
-        self.touching_15m_20ma_signal = False
+        self.touching_15m_7ma_signal = False
+        self.Short_liquidate_signal = False
+        self.Long_liquidate_signal = False
 
     def init_trade_threads(self):
         threading.Timer(0.5, self.no_position_thread).start()
@@ -72,7 +78,8 @@ class Main(QMainWindow, form_class) :
         threading.Timer(5, self.update_MACDhist_thr).start()
         threading.Timer(5, self.update_RSI_thr).start()
         threading.Timer(5, self.update_ATR_thr).start()
-
+        threading.Timer(5, self.update_touching_15m_20ma).start()
+        threading.Timer(5, self.checking_RSI_thr).start()
         threading.Timer(2, self.check_bools_and_update_signal_thr).start()
         threading.Timer(2, self.update_UI_thr).start()
         #self.main_thr()
@@ -124,7 +131,6 @@ class Main(QMainWindow, form_class) :
     def update_RSI_thr(self):
         while True:
             self.RSI = float(ta.RSI(self.candleStickArrFor1m_NP, timperiod=14)[-1])
-            self.checking_RSI()
             time.sleep(0.5)
 
     def update_ATR_thr(self):
@@ -143,9 +149,15 @@ class Main(QMainWindow, form_class) :
                 self.ATR_band_rising = False
                 self.ATR_band_falling = False
 
-            if self.now_price > self.moving_average_15m_24 - (self.moving_average_15m_24 * 0.002) and self.now_price < self.moving_average_15m_24 + (self.moving_average_15m_24 * 0.002):
+            time.sleep(0.5)
+
+    def update_touching_15m_20ma(self):
+        while True:
+            if self.now_price > self.moving_average_15m_7 - (self.moving_average_15m_7 * self.moving_average_15m_7_constant) and self.now_price < self.moving_average_15m_7 + (self.moving_average_15m_7 * self.moving_average_15m_7_constant):
                 self.touching_15m_20ma = True
-            time.sleep(0.1)
+            else:
+                self.touching_15m_20ma = False
+            time.sleep(0.05)
 
     def checking_MACDhist(self):
         macd_arr, macdsignal_arr, macdhist_arr = ta.MACD(self.candleStickArrFor1m_NP, fastperiod=12, slowperiod=26, signalperiod=9)
@@ -167,22 +179,23 @@ class Main(QMainWindow, form_class) :
             self.MACD_is_it_above_X = True
             self.MACD_is_it_below_X = False
 
-    def checking_RSI(self):
-        X_low = 35
-        X_high = 65
-        if self.RSI < X_low:
-            self.RSI_is_it_below_X = True
-            self.RSI_is_it_above_X = False
-            print(f'{self.RSI} 모드로 15분간 대기')
-            time.sleep(60*15)
-        elif self.RSI >= X_low and self.RSI <= X_high:
-            self.RSI_is_it_below_X = False
-            self.RSI_is_it_above_X = False
-        elif self.RSI > X_high:
-            self.RSI_is_it_below_X = False
-            self.RSI_is_it_above_X = True
-            print(f'{self.RSI} 모드로 15분간 대기')
-            time.sleep(60*15)
+    def checking_RSI_thr(self):
+        while(1):
+            if self.RSI < self.RSI_is_it_below_X_constant:
+                self.RSI_is_it_below_X = True
+                self.RSI_is_it_above_X = False
+                print(f'{self.RSI} 모드로 15분간 대기')
+                time.sleep(60*15)
+            elif self.RSI >= self.RSI_is_it_below_X_constant and self.RSI <= self.RSI_is_it_above_X_constant:
+                self.RSI_is_it_below_X = False
+                self.RSI_is_it_above_X = False
+            elif self.RSI > self.RSI_is_it_above_X_constant:
+                self.RSI_is_it_below_X = False
+                self.RSI_is_it_above_X = True
+                print(f'{self.RSI} 모드로 15분간 대기')
+                time.sleep(60*15)
+            time.sleep(0.5)
+
 
     def checking_ATR(self):
         price_high = []
@@ -208,9 +221,15 @@ class Main(QMainWindow, form_class) :
         high = avg_15m_20 + (float(real[-1]) * 2)
         low = avg_15m_20 - (float(real[-1]) * 2)
 
-        self.ATR_band_15_Top = high
+        sum_15m_7 = 0
+        for price in self.newCandleStickArr_15m[-7:]:
+            sum_15m_7 += float(price.close)
+        avg_15m_7 = sum_15m_7 / 7
+
+        self.ATR_band_15_Top = high #20일 이평선 기준으로 2 ATR을 빼고 더한것
         self.ATR_band_15_bottom = low
-        self.moving_average_15m_24 = avg_15m_20
+        self.moving_average_15m_7 = avg_15m_7 #7일 이평선에 닿으면 청산
+        self.moving_average_15m_20 = avg_15m_20
 
     def check_bools_and_update_signal_thr(self): #시그널을 끄는것은 트레이드쓰레드가 할 것
         while(1):
@@ -227,8 +246,12 @@ class Main(QMainWindow, form_class) :
             if self.ATR_band_falling == True:
                 self.ATR_short_signal = True
             if self.touching_15m_20ma == True:
-                self.touching_15m_20ma_signal = True
-            time.sleep(0.1)
+                self.touching_15m_7ma_signal = True
+            if self.RSI < (self.RSI_is_it_below_X_constant - 5) == True:
+                self.Short_liquidate_signal = True
+            if self.RSI > (self.RSI_is_it_above_X_constant + 5) == True:
+                self.Long_liquidate_signal = True
+            time.sleep(0.05)
 
     def update_UI_thr(self):
         while True:
@@ -238,9 +261,10 @@ class Main(QMainWindow, form_class) :
             self._macd_hist.setText(f'macd_hist : {str(self.macd_hist)}')
             self._macd_hist_prev.setText(f'macd_hist_prev : {str(self.macd_hist_prev)}')
             self._RSI.setText(f'RSI : {str(self.RSI)}')
-            self._ATR_band_15_Top.setText(f'ATR_Top : {str(self.ATR_band_15_Top)}')
+            self._ATR_band_15_Top.setText(f'ATR_Top : {str(self.moving_average_15m_20)} {str(self.ATR_band_15_Top)}')
             self._ATR_band_15_bottom.setText(f'ATR_bottom : {str(self.ATR_band_15_bottom)}')
-            self._moving_average_15m_24.setText(f'mv_15m : {str(self.moving_average_15m_24)}')
+            self._moving_average_15m_7.setText(f'mv_7m : {int(self.moving_average_15m_7)} {int(self.moving_average_15m_7 + (self.moving_average_15m_7 * self.moving_average_15m_7_constant))} {int(self.moving_average_15m_7 - (self.moving_average_15m_7 * self.moving_average_15m_7_constant))}')
+
             self._my_money.setText(f'{str(self.my_money)}')
 
             #signals UI update
@@ -278,9 +302,9 @@ class Main(QMainWindow, form_class) :
             else:
                 self._ATR_band_falling.setChecked(False)
             if self.touching_15m_20ma == True:
-                self._touching_15m_20ma.setChecked(True)
+                self._touching_15m_7ma.setChecked(True)
             else:
-                self._touching_15m_20ma.setChecked(False)
+                self._touching_15m_7ma.setChecked(False)
 
             #signals UI update
 
@@ -308,14 +332,23 @@ class Main(QMainWindow, form_class) :
                 self._ATR_short_signal.setChecked(True)
             else:
                 self._ATR_short_signal.setChecked(False)
-            if self.touching_15m_20ma_signal == True:
-                self._touching_15m_20ma_signal.setChecked(True)
+            if self.touching_15m_7ma_signal == True:
+                self._touching_15m_7ma_signal.setChecked(True)
             else:
-                self._touching_15m_20ma_signal.setChecked(False)
+                self._touching_15m_7ma_signal.setChecked(False)
+            if self.Long_liquidate_signal == True:
+                self._Long_liquidate_signal.setChecked(True)
+            else:
+                self._Long_liquidate_signal.setChecked(False)
+            if self.Short_liquidate_signal == True:
+                self._Short_liquidate_signal.setChecked(True)
+            else:
+                self._Short_liquidate_signal.setChecked(False)
 
             time.sleep(0.05)
 
     def no_position_thread(self):
+        self.del_signal()
         flag = 1
         while flag == 1:
             self._now_position.setText('no_position_thread')
@@ -345,21 +378,26 @@ class Main(QMainWindow, form_class) :
                 self.macd_exit_long_signal = False
             if self.macd_exit_short_signal == True:
                 self.macd_exit_short_signal = False
-            if self.touching_15m_20ma_signal == True:
-                self.touching_15m_20ma_signal = False
+            if self.touching_15m_7ma_signal == True:
+                self.touching_15m_7ma_signal = False
+            if self.Long_liquidate_signal == True:
+                self.Long_liquidate_signal = False
+            if self.Short_liquidate_signal == True:
+                self.Short_liquidate_signal = False
             time.sleep(0.05)
 
     def macd_long_thread(self):
+        self.del_signal()
         flag = 1
         while flag == 1:
             self._now_position.setText(f'macd_long_thread')
             if self.macd_exit_long_signal == True:
-                print(f"{datetime.now()} : {self.now_price} : macd_exit_long_signal  SELL")
+                print(f"{datetime.now()} : {self.now_price} : macd_exit_long_signal  이므로 손절")
                 self.post_order("SELL")
                 threading.Timer(1, self.no_position_thread).start()
                 flag = 0
-            elif self.macd_enter_short_signal == True:
-                print(f"{datetime.now()} : {self.now_price} : macd_enter_short_signal  SELL")
+            elif self.Long_liquidate_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : Long_liquidate_signal  이므로 포지션 청산")
                 self.post_order("SELL")
                 threading.Timer(1, self.no_position_thread).start()
                 flag = 0
@@ -379,21 +417,24 @@ class Main(QMainWindow, form_class) :
                 self.macd_enter_long_signal = False
             if self.macd_exit_short_signal == True:
                 self.macd_exit_short_signal = False
-            if self.touching_15m_20ma_signal == True:
-                self.touching_15m_20ma_signal = False
+            if self.touching_15m_7ma_signal == True:
+                self.touching_15m_7ma_signal = False
+            if self.Short_liquidate_signal == True:
+                self.Short_liquidate_signal = False
             time.sleep(0.05)
 
     def macd_short_thread(self):
+        self.del_signal()
         flag = 1
         while flag == 1:
             self._now_position.setText(f'macd_short_thread')
             if self.macd_exit_short_signal == True:
-                print(f"{datetime.now()} : {self.now_price} : macd_exit_short_signal  BUY")
+                print(f"{datetime.now()} : {self.now_price} : macd_exit_short_signal  이므로 손절")
                 self.post_order("BUY")
                 threading.Timer(1, self.no_position_thread).start()
                 flag = 0
-            elif self.macd_enter_long_signal == True:
-                print(f"{datetime.now()} : {self.now_price} : macd_enter_long_signal  BUY")
+            elif self.Short_liquidate_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : Short_liquidate_signal  이므로 포지션 청산")
                 self.post_order("BUY")
                 threading.Timer(1, self.no_position_thread).start()
                 flag = 0
@@ -413,16 +454,19 @@ class Main(QMainWindow, form_class) :
                 self.macd_enter_short_signal = False
             if self.macd_exit_long_signal == True:
                 self.macd_exit_long_signal = False
-            if self.touching_15m_20ma_signal == True:
-                self.touching_15m_20ma_signal = False
+            if self.touching_15m_7ma_signal == True:
+                self.touching_15m_7ma_signal = False
+            if self.Long_liquidate_signal == True:
+                self.Long_liquidate_signal = False
             time.sleep(0.05)
 
     def ATR_long_thread(self):
+        self.del_signal()
         flag = 1
         while flag == 1:
             self._now_position.setText(f'ATR_long_thread')
-            if self.touching_15m_20ma_signal == True:
-                print(f"{datetime.now()} : {self.now_price} : touching_15m_20ma_signal  SELL")
+            if self.touching_15m_7ma_signal == True:
+                print(f"{datetime.now()} : {self.now_price}에 self.touching_15m_7_signal이 {self.touching_15m_7ma_signal}이므로 SELL")
                 self.post_order("SELL")
                 threading.Timer(1, self.no_position_thread).start()
                 flag = 0
@@ -440,15 +484,19 @@ class Main(QMainWindow, form_class) :
                 self.ATR_long_signal = False
             if self.ATR_short_signal == True:
                 self.ATR_short_signal = False
+            if self.Long_liquidate_signal == True:
+                self.Long_liquidate_signal = False
+            if self.Short_liquidate_signal == True:
+                self.Short_liquidate_signal = False
             time.sleep(0.05)
 
-
     def ATR_short_thread(self):
+        self.del_signal()
         flag = 1
         while flag == 1:
             self._now_position.setText(f'ATR_short_thread')
-            if self.touching_15m_20ma_signal == True:
-                print(f"{datetime.now()} : {self.now_price} : touching_15m_20ma_signal  BUY")
+            if self.touching_15m_7ma_signal == True:
+                print(f"{datetime.now()} : {self.now_price} : touching_15m_7ma_signal  BUY")
                 self.post_order("BUY")
                 threading.Timer(1, self.no_position_thread).start()
                 flag = 0
@@ -466,19 +514,52 @@ class Main(QMainWindow, form_class) :
                 self.ATR_long_signal = False
             if self.ATR_short_signal == True:
                 self.ATR_short_signal = False
+            if self.Long_liquidate_signal == True:
+                self.Long_liquidate_signal = False
+            if self.Short_liquidate_signal == True:
+                self.Short_liquidate_signal = False
+            time.sleep(0.05)
 
     def get_balance(self):
         result = self.request_client.get_balance()
         return result[0].balance
 
+    def del_signal(self):
+        self.macd_enter_long_signal = False
+        self.macd_enter_short_signal = False
+        self.macd_exit_long_signal = False
+        self.macd_exit_short_signal = False
+        self.ATR_long_signal = False
+        self.ATR_short_signal = False
+        self.Long_liquidate_signal = False
+        self.Short_liquidate_signal = False
+        self.touching_15m_7ma_signal = False
+
     def post_order(self, side, order_type="MARKET", quantity=0.001):
-        if side == "BUY" and order_type == "MARKET":
-            result = self.request_client.post_order(symbol="BTCUSDT", side=OrderSide.BUY,
-                                                    ordertype=OrderType.MARKET, quantity=quantity)
-        elif side == "SELL" and order_type == "MARKET":
-            result = self.request_client.post_order(symbol="BTCUSDT", side=OrderSide.SELL,
-                                                    ordertype=OrderType.MARKET, quantity=quantity)
-        self.my_money = self.get_balance()
+        try:
+            '''
+            if side == "BUY" and order_type == "MARKET":
+                result = self.request_client.post_order(symbol="BTCUSDT", side=OrderSide.BUY,
+                                                        ordertype=OrderType.MARKET, quantity=quantity)
+            elif side == "SELL" and order_type == "MARKET":
+                result = self.request_client.post_order(symbol="BTCUSDT", side=OrderSide.SELL,
+                                                        ordertype=OrderType.MARKET, quantity=quantity)
+            '''
+            self.my_money = self.get_balance()
+        except Exception as e:
+            print(e)
+
+    def debuging_print(self):
+        print(f"{datetime.now()} :"
+              f" self.macd_enter_long_signal : {self.macd_enter_long_signal}"
+              f" self.macd_enter_short_signal : {self.macd_enter_short_signal}"
+              f" self.macd_exit_short_signal : {self.macd_exit_short_signal} "
+              f" self.macd_exit_long_signal : {self.macd_exit_long_signal} "
+              f" self.ATR_long_signal : {self.ATR_long_signal} "
+              f" self.ATR_short_signal : {self.ATR_short_signal} "
+              f" self.touching_15m_7ma_signal : {self.touching_15m_7ma_signal} "
+              f" self.Short_liquidate_signal : {self.Short_liquidate_signal} "
+              f" self.Long_liquidate_signal : {self.Long_liquidate_signal} ")
 
 '''
     def main_thr(self):
@@ -598,7 +679,7 @@ class Main(QMainWindow, form_class) :
                 print(f'{datetime.now()}  롱 포지션을 청산하였습니다. 현재가 : {self.now_price}, 차익 {percentage*100*20}%, 현재 지갑 {self.my_money}')
 '''
 if __name__ == "__main__" :
-    sys.setrecursionlimit(5000)
+    #sys.setrecursionlimit(5000)
     app = QApplication(sys.argv)
     myWindow = Main()
     myWindow.show()
